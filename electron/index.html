@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Google OAuth</title>
+</head>
+<body>
+  <h2>Sign in with Google</h2>
+  <button onclick="window.api.openAuthUrl()">Sign In</button>
+
+  <h3>Refresh Token:</h3>
+  <pre id="tokenBox">No token yet</pre>
+
+  <button onclick="loadToken()">Get Latest Token</button>
+
+  <script>
+    async function loadToken() {
+      const data = await window.api.getRefreshToken();
+      document.getElementById("tokenBox").innerText = data.refreshToken || "No token received yet";
+    }
+  </script>
+</body>
+</html>
