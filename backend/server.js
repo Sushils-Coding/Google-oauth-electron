@@ -70,6 +70,8 @@ app.get("/get-latest-tokens", (req, res) => {
   res.json({
     refreshToken: latestRefreshToken,
     accessToken: latestAccessToken,
+    idToken: oauth2Client.credentials.id_token,
+    expiryDate: oauth2Client.credentials.expiry_date,
   });
 });
 

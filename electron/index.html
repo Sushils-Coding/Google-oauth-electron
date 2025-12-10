@@ -9,18 +9,52 @@
   <h2>Sign in with Google</h2>
   <button onclick="window.api.openAuthUrl()">Sign In</button>
 
+  <h3>User ID:</h3>
+  <pre id="userBox"></pre>
+
   <h3>Refresh Token:</h3>
-  <pre id="refreshBox"></pre>
+  <pre id="refreshBox">Waiting...</pre>
 
   <h3>Access Token:</h3>
-  <pre id="accessBox"></pre>
+  <pre id="accessBox">Waiting...</pre>
 
-  <!-- <button onclick="loadToken()">Get Latest Token</button> -->
+  <h3>Token Created At:</h3>
+  <pre id="createdAtBox">Waiting...</pre>
+
+  <h3>Token Expires At:</h3>
+  <pre id="expiresAtBox">Waiting...</pre>
 
   <script>
-    window.api.startTokenWatcher((tokens) => {
+    window.api.startTokenWatcher(async (tokens) => {
+
+      // Decode userId from id_token
+      let userId = "Unknown";
+      if (tokens.idToken) {
+        const payload = JSON.parse(atob(tokens.idToken.split(".")[1]));
+        userId = payload.sub;
+      }
+
+      // Format times
+      const createdAt = new Date().toLocaleString();
+      const expiresAt = tokens.expiryDate
+        ? new Date(tokens.expiryDate).toLocaleString()
+        : "Unknown";
+
+      document.getElementById("userBox").innerText = userId;
       document.getElementById("refreshBox").innerText = tokens.refreshToken || "Waiting...";
       document.getElementById("accessBox").innerText = tokens.accessToken || "Waiting...";
+      document.getElementById("createdAtBox").innerText = createdAt;
+      document.getElementById("expiresAtBox").innerText = expiresAt;
+
+      // Save to IndexedDB
+      await window.api.saveToIndexedDB({
+        id: "google-user",
+        userId,
+        accessToken: tokens.accessToken,
+        refreshToken: tokens.refreshToken,
+        createdAt,
+        expiresAt
+      });
     });
   </script>
 </body>
