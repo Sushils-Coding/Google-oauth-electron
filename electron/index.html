@@ -3,58 +3,56 @@
 
 <head>
   <title>Google OAuth</title>
+  <style>
+    button {
+      padding: 10px 20px;
+      font-size: 16px;
+      cursor: pointer;
+      margin-top: 20px;
+    }
+
+    #createEventBtn {
+      display: none; /* hidden until login success */
+    }
+  </style>
 </head>
 
 <body>
-  <h2>Sign in with Google</h2>
-  <button onclick="window.api.openAuthUrl()">Sign In</button>
+  <button id="signInBtn" onclick="window.api.openAuthUrl()">Sign In with Google</button>
 
-  <h3>User ID:</h3>
-  <pre id="userBox"></pre>
-
-  <h3>Refresh Token:</h3>
-  <pre id="refreshBox">Waiting...</pre>
-
-  <h3>Access Token:</h3>
-  <pre id="accessBox">Waiting...</pre>
-
-  <h3>Token Created At:</h3>
-  <pre id="createdAtBox">Waiting...</pre>
-
-  <h3>Token Expires At:</h3>
-  <pre id="expiresAtBox">Waiting...</pre>
+  <button id="createEventBtn">Create Event</button>
 
   <script>
-    window.api.startTokenWatcher(async (tokens) => {
+    let savedCreatedAt = null;
 
-      // Decode userId from id_token
-      let userId = "Unknown";
-      if (tokens.idToken) {
+    window.api.startTokenWatcher(async (tokens) => {
+      if (tokens && tokens.accessToken && tokens.idToken) {
+
+        let userId = "Unknown";
         const payload = JSON.parse(atob(tokens.idToken.split(".")[1]));
         userId = payload.sub;
+
+        if (!savedCreatedAt) {
+          savedCreatedAt = new Date().toLocaleString();
+        }
+
+        const expiresAt = tokens.expiryDate
+          ? new Date(tokens.expiryDate).toLocaleString()
+          : "Unknown";
+
+        // Store tokens in IndexedDB
+        await window.api.saveToIndexedDB({
+          id: "google-user",
+          userId,
+          refreshToken: tokens.refreshToken,
+          accessToken: tokens.accessToken,
+          createdAt: savedCreatedAt,
+          expiresAt
+        });
+
+        document.getElementById("signInBtn").style.display = "none";
+        document.getElementById("createEventBtn").style.display = "inline-block";
       }
-
-      // Format times
-      const createdAt = new Date().toLocaleString();
-      const expiresAt = tokens.expiryDate
-        ? new Date(tokens.expiryDate).toLocaleString()
-        : "Unknown";
-
-      document.getElementById("userBox").innerText = userId;
-      document.getElementById("refreshBox").innerText = tokens.refreshToken || "Waiting...";
-      document.getElementById("accessBox").innerText = tokens.accessToken || "Waiting...";
-      document.getElementById("createdAtBox").innerText = createdAt;
-      document.getElementById("expiresAtBox").innerText = expiresAt;
-
-      // Save to IndexedDB
-      await window.api.saveToIndexedDB({
-        id: "google-user",
-        userId,
-        accessToken: tokens.accessToken,
-        refreshToken: tokens.refreshToken,
-        createdAt,
-        expiresAt
-      });
     });
   </script>
 </body>
