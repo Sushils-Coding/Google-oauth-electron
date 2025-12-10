@@ -6,8 +6,9 @@ const { google } = require("googleapis");
 const app = express();
 app.use(cors());
 
-// Store the latest refresh token so Electron can fetch it later
+// Store the latest tokens so Electron can fetch it later
 let latestRefreshToken = null;
+let latestAccessToken = null;
 
 const oauth2Client = new google.auth.OAuth2(
   process.env.CLIENT_ID,
@@ -15,44 +16,48 @@ const oauth2Client = new google.auth.OAuth2(
   process.env.REDIRECT_URI
 );
 
-
 // API: Generate OAuth URL
-
 app.get("/auth-url", (req, res) => {
   const scopes = [
     "https://www.googleapis.com/auth/userinfo.email",
     "https://www.googleapis.com/auth/userinfo.profile",
-    "https://mail.google.com/"
+    "https://mail.google.com/",
   ];
 
   const url = oauth2Client.generateAuthUrl({
     access_type: "offline",
     prompt: "consent",
-    scope: scopes
+    scope: scopes,
   });
 
   res.json({ url });
 });
 
+// app.get('/', async(req, res) => {
+//     res.send("hello world!");
+// })
 
 // API: OAuth Callback (Google redirects here)
-
-app.get("/oauth-callback", async (req, res) => {
+app.get("/oauth2callback", async (req, res) => {
   const code = req.query.code;
 
   try {
     const { tokens } = await oauth2Client.getToken(code);
     oauth2Client.setCredentials(tokens);
 
-    // Save refresh token for Electron
     latestRefreshToken = tokens.refresh_token;
+
+    // Generating access token using refresh token
+    const newAccessToken = await oauth2Client.getAccessToken();
+    latestAccessToken = newAccessToken.token;
+
     console.log("Refresh Token:", latestRefreshToken);
+    console.log("Access Token:", latestAccessToken);
 
     return res.send(`
       <h2>Login successful!</h2>
       <p>You can now close this window and return to the Electron app.</p>
     `);
-
   } catch (err) {
     console.error("Error exchanging code for token:", err);
     return res.status(500).send("Error during authentication");
@@ -61,10 +66,12 @@ app.get("/oauth-callback", async (req, res) => {
 
 // API: Electron fetches refresh token from here
 
-app.get("/get-refresh-token", (req, res) => {
-  res.json({ refreshToken: latestRefreshToken });
+app.get("/get-latest-tokens", (req, res) => {
+  res.json({
+    refreshToken: latestRefreshToken,
+    accessToken: latestAccessToken,
+  });
 });
-
 
 app.listen(8080, () => {
   console.log("Backend running on http://localhost:8080");
