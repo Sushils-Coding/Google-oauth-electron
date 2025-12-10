@@ -12,7 +12,28 @@
     }
 
     #createEventBtn {
-      display: none; /* hidden until login success */
+      display: none;
+    }
+
+    /* Simple modal styling */
+    .modal {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.5);
+      justify-content: center;
+      align-items: center;
+    }
+
+    .modal-content {
+      background: white;
+      padding: 20px;
+      width: 300px;
+      border-radius: 8px;
+      text-align: center;
     }
   </style>
 </head>
@@ -22,31 +43,68 @@
 
   <button id="createEventBtn">Create Event</button>
 
+  <!-- MODAL: Token expired -->
+  <div id="expiredModal" class="modal">
+    <div class="modal-content">
+      <h3>Session Expired</h3>
+      <p>Your session has expired. Please sign in again.</p>
+      <button onclick="window.api.openAuthUrl()">Sign In Again</button>
+    </div>
+  </div>
+
+  <!-- MODAL: Create Event -->
+  <div id="eventModal" class="modal">
+    <div class="modal-content">
+      <h3>Create Event</h3>
+      <input type="text" id="eventName" placeholder="Event Name" /><br><br>
+      <input type="file" id="eventThumbnail" accept="image/*" /><br><br>
+      <button onclick="submitEvent()">Submit Event</button>
+      <button onclick="closeEventModal()">Close</button>
+    </div>
+  </div>
+
   <script>
-    let savedCreatedAt = null;
+    function getTokenDataFromDB() {
+      return new Promise((resolve, reject) => {
+        const request = indexedDB.open("OAuthDB", 1);
+
+        request.onsuccess = () => {
+          const db = request.result;
+          const tx = db.transaction("tokens", "readonly");
+          const store = tx.objectStore("tokens");
+          const getRequest = store.get("google-user");
+
+          getRequest.onsuccess = () => {
+            resolve(getRequest.result || null);
+          };
+
+          getRequest.onerror = () => reject(getRequest.error);
+        };
+
+        request.onerror = () => reject(request.error);
+      });
+    }
+
 
     window.api.startTokenWatcher(async (tokens) => {
       if (tokens && tokens.accessToken && tokens.idToken) {
-
-        let userId = "Unknown";
         const payload = JSON.parse(atob(tokens.idToken.split(".")[1]));
-        userId = payload.sub;
-
-        if (!savedCreatedAt) {
-          savedCreatedAt = new Date().toLocaleString();
-        }
+        const userId = payload.sub;
 
         const expiresAt = tokens.expiryDate
-          ? new Date(tokens.expiryDate).toLocaleString()
-          : "Unknown";
+          ? new Date(tokens.expiryDate).toISOString()
+          : null;
 
-        // Store tokens in IndexedDB
+        const createdAt = tokens.createdAt
+          ? new Date(tokens.createdAt).toLocaleString()
+          : new Date().toLocaleString();
+
         await window.api.saveToIndexedDB({
           id: "google-user",
           userId,
           refreshToken: tokens.refreshToken,
           accessToken: tokens.accessToken,
-          createdAt: savedCreatedAt,
+          createdAt,
           expiresAt
         });
 
@@ -54,7 +112,53 @@
         document.getElementById("createEventBtn").style.display = "inline-block";
       }
     });
+
+    document.getElementById("createEventBtn").onclick = async function () {
+      const tokenData = await getTokenDataFromDB();
+
+      if (!tokenData || !tokenData.expiresAt) {
+        alert("Token missing, please sign in again.");
+        return;
+      }
+
+      const now = new Date();
+      const exp = new Date(tokenData.expiresAt);
+
+      console.log("Current time:", now.toLocaleString());
+      console.log("Expiry time:", exp.toLocaleString());
+      console.log("Created time:", tokenData.createdAt);
+      console.log("Is expired:", now >= exp);
+
+      if (isNaN(exp.getTime()) || now >= exp) {
+        console.log("Token expired or invalid, showing expired modal");
+        document.getElementById("expiredModal").style.display = "flex";
+      } else {
+        console.log("Token valid, showing event modal");
+        document.getElementById("eventModal").style.display = "flex";
+      }
+    };
+
+
+    function closeEventModal() {
+      document.getElementById("eventModal").style.display = "none";
+    }
+
+
+    function submitEvent() {
+      const name = document.getElementById("eventName").value;
+      const file = document.getElementById("eventThumbnail").files[0];
+
+      if (!name || !file) {
+        alert("Please enter event name and select an image.");
+        return;
+      }
+
+      alert("Event captured (not uploaded yet):\n" + name);
+
+      closeEventModal();
+    }
   </script>
+
 </body>
 
 </html>

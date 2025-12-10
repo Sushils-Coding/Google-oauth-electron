@@ -9,6 +9,7 @@ app.use(cors());
 // Store the latest tokens so Electron can fetch it later
 let latestRefreshToken = null;
 let latestAccessToken = null;
+let tokenCreatedAt = null;
 
 const oauth2Client = new google.auth.OAuth2(
   process.env.CLIENT_ID,
@@ -46,6 +47,7 @@ app.get("/oauth2callback", async (req, res) => {
     oauth2Client.setCredentials(tokens);
 
     latestRefreshToken = tokens.refresh_token;
+    tokenCreatedAt = new Date().toISOString();
 
     // Generating access token using refresh token
     const newAccessToken = await oauth2Client.getAccessToken();
@@ -72,6 +74,7 @@ app.get("/get-latest-tokens", (req, res) => {
     accessToken: latestAccessToken,
     idToken: oauth2Client.credentials.id_token,
     expiryDate: oauth2Client.credentials.expiry_date,
+    createdAt: tokenCreatedAt,
   });
 });
 
