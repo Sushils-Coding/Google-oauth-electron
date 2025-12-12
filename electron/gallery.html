@@ -1,0 +1,332 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <title>Event Gallery</title>
+  <style>
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: Arial, sans-serif;
+      padding: 20px;
+      background-color: #f5f5f5;
+    }
+
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 30px;
+      padding-bottom: 15px;
+      border-bottom: 2px solid #ddd;
+    }
+
+    .header h1 {
+      margin: 0;
+      color: #333;
+    }
+
+    .back-btn {
+      padding: 10px 20px;
+      font-size: 14px;
+      cursor: pointer;
+      background-color: #6c757d;
+      color: white;
+      border: none;
+      border-radius: 5px;
+      text-decoration: none;
+    }
+
+    .back-btn:hover {
+      background-color: #5a6268;
+    }
+
+    .upload-section {
+      background: white;
+      padding: 20px;
+      border-radius: 8px;
+      margin-bottom: 30px;
+      box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+    }
+
+    .upload-section h3 {
+      margin-top: 0;
+      color: #333;
+    }
+
+    .upload-form {
+      display: flex;
+      gap: 15px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+
+    .upload-form input[type="file"] {
+      flex: 1;
+      min-width: 200px;
+    }
+
+    .upload-btn {
+      padding: 10px 25px;
+      font-size: 14px;
+      cursor: pointer;
+      background-color: #28a745;
+      color: white;
+      border: none;
+      border-radius: 5px;
+    }
+
+    .upload-btn:hover {
+      background-color: #218838;
+    }
+
+    .upload-btn:disabled {
+      background-color: #ccc;
+      cursor: not-allowed;
+    }
+
+    .gallery-container {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+      gap: 20px;
+    }
+
+    .gallery-item {
+      background: white;
+      border-radius: 8px;
+      overflow: hidden;
+      box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+      transition: transform 0.2s;
+    }
+
+    .gallery-item:hover {
+      transform: scale(1.02);
+    }
+
+    .gallery-item img {
+      width: 100%;
+      height: 200px;
+      object-fit: cover;
+      cursor: pointer;
+    }
+
+    .gallery-item .info {
+      padding: 10px;
+      font-size: 12px;
+      color: #666;
+    }
+
+    .no-images {
+      text-align: center;
+      color: #666;
+      padding: 40px;
+      background: white;
+      border-radius: 8px;
+    }
+
+    .loading {
+      text-align: center;
+      padding: 20px;
+      color: #666;
+    }
+
+    /* Lightbox Modal */
+    .lightbox {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.9);
+      justify-content: center;
+      align-items: center;
+      z-index: 1000;
+    }
+
+    .lightbox img {
+      max-width: 90%;
+      max-height: 90%;
+      border-radius: 8px;
+    }
+
+    .lightbox-close {
+      position: absolute;
+      top: 20px;
+      right: 30px;
+      font-size: 40px;
+      color: white;
+      cursor: pointer;
+    }
+
+    .lightbox-close:hover {
+      color: #ccc;
+    }
+
+    .upload-progress {
+      margin-top: 10px;
+      color: #666;
+      font-style: italic;
+    }
+  </style>
+</head>
+
+<body>
+  <div class="header">
+    <h1 id="eventTitle">Event Gallery</h1>
+    <a href="index.html" class="back-btn">← Back to Events</a>
+  </div>
+
+  <div class="upload-section">
+    <h3>Upload Image to Gallery</h3>
+    <div class="upload-form">
+      <input type="file" id="galleryImage" accept="image/*" multiple />
+      <button class="upload-btn" onclick="uploadImage()">Upload Image</button>
+    </div>
+    <div id="uploadProgress" class="upload-progress"></div>
+  </div>
+
+  <div id="galleryContainer" class="gallery-container">
+    <div class="loading">Loading gallery...</div>
+  </div>
+
+  <!-- Lightbox Modal -->
+  <div id="lightbox" class="lightbox" onclick="closeLightbox()">
+    <span class="lightbox-close">&times;</span>
+    <img id="lightboxImage" src="" alt="Full size image" />
+  </div>
+
+  <script>
+    // Get event ID from URL parameters
+    const urlParams = new URLSearchParams(window.location.search);
+    const eventId = urlParams.get('eventId');
+    const eventName = urlParams.get('eventName');
+
+    // Set page title
+    if (eventName) {
+      document.getElementById('eventTitle').textContent = `Gallery: ${decodeURIComponent(eventName)}`;
+      document.title = `Gallery - ${decodeURIComponent(eventName)}`;
+    }
+
+    // Load gallery images on page load
+    if (eventId) {
+      loadGallery();
+    } else {
+      document.getElementById('galleryContainer').innerHTML = 
+        '<div class="no-images">Error: No event ID provided</div>';
+    }
+
+    async function loadGallery() {
+      try {
+        const response = await fetch(`http://localhost:8080/gallery/${eventId}`);
+        const data = await response.json();
+
+        const container = document.getElementById('galleryContainer');
+        container.innerHTML = '';
+
+        if (data.images && data.images.length > 0) {
+          data.images.forEach((image) => {
+            const item = document.createElement('div');
+            item.className = 'gallery-item';
+            
+            const uploadDate = new Date(image.uploadedAt).toLocaleString();
+            
+            item.innerHTML = `
+              <img src="${image.imageUrl}" alt="Gallery image" onclick="openLightbox('${image.imageUrl}')" />
+              <div class="info">Uploaded: ${uploadDate}</div>
+            `;
+            container.appendChild(item);
+          });
+        } else {
+          container.innerHTML = '<div class="no-images">No images in this gallery yet. Upload some images above!</div>';
+        }
+      } catch (err) {
+        console.error('Error loading gallery:', err);
+        document.getElementById('galleryContainer').innerHTML = 
+          '<div class="no-images">Error loading gallery. Please try again.</div>';
+      }
+    }
+
+    async function uploadImage() {
+      const fileInput = document.getElementById('galleryImage');
+      const files = fileInput.files;
+
+      if (!files || files.length === 0) {
+        alert('Please select an image to upload.');
+        return;
+      }
+
+      if (!eventId) {
+        alert('Error: No event ID found.');
+        return;
+      }
+
+      const progressDiv = document.getElementById('uploadProgress');
+      const uploadBtn = document.querySelector('.upload-btn');
+      
+      uploadBtn.disabled = true;
+      
+      let uploaded = 0;
+      const total = files.length;
+
+      for (const file of files) {
+        try {
+          progressDiv.textContent = `Uploading ${uploaded + 1} of ${total}...`;
+
+          const formData = new FormData();
+          formData.append('image', file);
+          formData.append('eventId', eventId);
+
+          const response = await fetch('http://localhost:8080/gallery/upload', {
+            method: 'POST',
+            body: formData,
+          });
+
+          const result = await response.json();
+
+          if (result.success) {
+            uploaded++;
+          } else {
+            console.error('Failed to upload:', file.name, result.error);
+          }
+        } catch (err) {
+          console.error('Error uploading image:', err);
+        }
+      }
+
+      uploadBtn.disabled = false;
+      fileInput.value = '';
+      
+      if (uploaded > 0) {
+        progressDiv.textContent = `Successfully uploaded ${uploaded} image(s)!`;
+        loadGallery(); // Reload gallery to show new images
+        
+        setTimeout(() => {
+          progressDiv.textContent = '';
+        }, 3000);
+      } else {
+        progressDiv.textContent = 'Failed to upload images. Please try again.';
+      }
+    }
+
+    function openLightbox(imageUrl) {
+      document.getElementById('lightboxImage').src = imageUrl;
+      document.getElementById('lightbox').style.display = 'flex';
+    }
+
+    function closeLightbox() {
+      document.getElementById('lightbox').style.display = 'none';
+    }
+
+    // Close lightbox with Escape key
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') {
+        closeLightbox();
+      }
+    });
+  </script>
+</body>
+
+</html>

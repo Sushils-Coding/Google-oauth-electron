@@ -35,6 +35,40 @@
       border-radius: 8px;
       text-align: center;
     }
+
+    #eventsContainer {
+      margin-top: 30px;
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+      gap: 20px;
+    }
+
+    .event-card {
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      padding: 10px;
+      text-align: center;
+      cursor: pointer;
+      transition: transform 0.2s, box-shadow 0.2s;
+    }
+
+    .event-card:hover {
+      transform: translateY(-5px);
+      box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+    }
+
+    .event-card img {
+      width: 100%;
+      height: 150px;
+      object-fit: cover;
+      border-radius: 4px;
+      margin-bottom: 10px;
+    }
+
+    .event-card h4 {
+      margin: 0;
+      font-size: 16px;
+    }
   </style>
 </head>
 
@@ -42,6 +76,9 @@
   <button id="signInBtn" onclick="window.api.openAuthUrl()">Sign In with Google</button>
 
   <button id="createEventBtn">Create Event</button>
+
+  <!-- Events Display Container -->
+  <div id="eventsContainer"></div>
 
   <!-- MODAL: Token expired -->
   <div id="expiredModal" class="modal">
@@ -64,6 +101,8 @@
   </div>
 
   <script>
+    let currentUserId = null;
+
     function getTokenDataFromDB() {
       return new Promise((resolve, reject) => {
         const request = indexedDB.open("OAuthDB", 1);
@@ -90,6 +129,7 @@
       if (tokens && tokens.accessToken && tokens.idToken) {
         const payload = JSON.parse(atob(tokens.idToken.split(".")[1]));
         const userId = payload.sub;
+        currentUserId = userId;
 
         const expiresAt = tokens.expiryDate
           ? new Date(tokens.expiryDate).toISOString()
@@ -110,6 +150,9 @@
 
         document.getElementById("signInBtn").style.display = "none";
         document.getElementById("createEventBtn").style.display = "inline-block";
+
+        // Load events for the user
+        loadEvents(userId);
       }
     });
 
@@ -141,10 +184,13 @@
 
     function closeEventModal() {
       document.getElementById("eventModal").style.display = "none";
+      // Clear form
+      document.getElementById("eventName").value = "";
+      document.getElementById("eventThumbnail").value = "";
     }
 
 
-    function submitEvent() {
+    async function submitEvent() {
       const name = document.getElementById("eventName").value;
       const file = document.getElementById("eventThumbnail").files[0];
 
@@ -153,9 +199,60 @@
         return;
       }
 
-      alert("Event captured (not uploaded yet):\n" + name);
+      try {
+        const formData = new FormData();
+        formData.append("eventName", name);
+        formData.append("thumbnail", file);
+        formData.append("userId", currentUserId);
 
-      closeEventModal();
+        const response = await fetch("http://localhost:8080/create-event", {
+          method: "POST",
+          body: formData,
+        });
+
+        const result = await response.json();
+
+        if (result.success) {
+          alert("Event created successfully!");
+          closeEventModal();
+          loadEvents(currentUserId); // Reload events
+        } else {
+          alert("Failed to create event: " + (result.error || "Unknown error"));
+        }
+      } catch (err) {
+        console.error("Error creating event:", err);
+        alert("Error creating event: " + err.message);
+      }
+    }
+
+    async function loadEvents(userId) {
+      try {
+        const response = await fetch(`http://localhost:8080/get-events/${userId}`);
+        const data = await response.json();
+
+        const container = document.getElementById("eventsContainer");
+        container.innerHTML = "";
+
+        if (data.events && data.events.length > 0) {
+          data.events.forEach((event) => {
+            const eventCard = document.createElement("div");
+            eventCard.className = "event-card";
+            eventCard.innerHTML = `
+              <img src="${event.thumbnailUrl}" alt="${event.eventName}" />
+              <h4>${event.eventName}</h4>
+            `;
+            // Make card clickable to open gallery
+            eventCard.onclick = () => {
+              window.location.href = `gallery.html?eventId=${event.id}&eventName=${encodeURIComponent(event.eventName)}`;
+            };
+            container.appendChild(eventCard);
+          });
+        } else {
+          container.innerHTML = "<p>No events created yet.</p>";
+        }
+      } catch (err) {
+        console.error("Error loading events:", err);
+      }
     }
   </script>
 
